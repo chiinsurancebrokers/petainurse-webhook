@@ -10,7 +10,7 @@ Events που χειρίζεται:
   - invoice.payment_failed         → log μόνο (δεν ακυρώνει αμέσως)
 """
 
-import os, logging
+import os, logging, hashlib
 from datetime import datetime, timezone
 
 import stripe
@@ -49,6 +49,11 @@ def get_customer_email(customer_id: str) -> str:
         return ""
 
 
+def user_ref(email: str) -> str:
+    """Stable, non-reversible identifier for logs; never log raw customer email."""
+    return hashlib.sha256((email or "").strip().lower().encode()).hexdigest()[:12] if email else "unknown"
+
+
 def upsert_subscription(email: str, plan: str, valid_until=None, notes: str = ""):
     """Γράφει/ενημερώνει εγγραφή στο Supabase subscriptions table."""
     if not email:
@@ -63,9 +68,9 @@ def upsert_subscription(email: str, plan: str, valid_until=None, notes: str = ""
     }
     try:
         sb.table("subscriptions").upsert(row, on_conflict="user_email").execute()
-        log.info(f"Subscription upserted: {email} → plan={plan}, valid_until={valid_until}")
+        log.info(f"Subscription upserted: user={user_ref(email)} plan={plan}, valid_until={valid_until}")
     except Exception as e:
-        log.error(f"Supabase upsert failed for {email}: {e}")
+        log.error(f"Supabase upsert failed for user={user_ref(email)}: {type(e).__name__}")
         raise
 
 
@@ -155,7 +160,7 @@ async def stripe_webhook(
     elif event_type == "invoice.payment_failed":
         customer_id = data.get("customer", "")
         email       = get_customer_email(customer_id)
-        log.warning(f"Payment failed for {email} | invoice={data.get('id')}")
+        log.warning(f"Payment failed for user={user_ref(email)} | invoice={data.get('id')}")
         # Δεν ακυρώνουμε αμέσως — το Stripe θα στείλει subscription.updated/deleted
         # αν αποτύχουν και οι retry attempts.
 
