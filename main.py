@@ -28,7 +28,7 @@ STRIPE_SECRET_KEY      = os.environ["STRIPE_SECRET_KEY"]
 STRIPE_WEBHOOK_SECRET  = os.environ["STRIPE_WEBHOOK_SECRET"]
 SUPABASE_URL           = os.environ["SUPABASE_URL"]
 SUPABASE_SERVICE_KEY   = os.environ["SUPABASE_SERVICE_KEY"]   # service_role key!
-STRIPE_PRICE_MONTHLY   = os.environ.get("STRIPE_PRICE_MONTHLY", "")
+STRIPE_PRICE_MONTHLY   = os.environ.get("STRIPE_PRICE_MONTHLY", "") or os.environ.get("STRIPE_PRICE_MONTHLY ", "")
 STRIPE_PRICE_YEARLY    = os.environ.get("STRIPE_PRICE_YEARLY", "")
 
 stripe.api_key = STRIPE_SECRET_KEY
@@ -81,24 +81,6 @@ def ts_to_iso(unix_ts) -> str | None:
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "petainurse-webhook"}
-
-
-@app.get("/subscription/{email}")
-def check_subscription(email: str):
-    """Admin endpoint: έλεγχος συνδρομής για email."""
-    sb = get_supabase()
-    try:
-        res = (sb.table("subscriptions")
-                 .select("*")
-                 .eq("user_email", email)
-                 .limit(1)
-                 .execute())
-        rows = res.data or []
-        if not rows:
-            return {"email": email, "found": False}
-        return {"email": email, "found": True, "subscription": rows[0]}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/webhook")
